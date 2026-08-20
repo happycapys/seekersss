@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://theseekers.quest"),
   title: "The Seekers",
-  description: "Seek. Find. Claim. Join the goblin treasure hunt.",
+  description: "Five thousand Seekers. Twelve hidden words. One ultimate treasure on Robinhood Chain.",
   other: {
     "codex-preview": "development",
   },

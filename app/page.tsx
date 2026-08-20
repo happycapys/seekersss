@@ -1,43 +1,174 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
 
-const seekers=["https://i.ibb.co/yFBtTrr0/nft-25.png","https://i.ibb.co/MDSp28TD/nft-21.png","https://i.ibb.co/hJYmpwDy/nft-23.png","https://i.ibb.co/j952m33j/nft-13.png","https://i.ibb.co/rGLZK6G9/nft-9.png","https://i.ibb.co/TDcq8bXh/1.png","https://i.ibb.co/43Fjcm2/7.png"];
-const huntPostUrl="https://x.com/theseekersrh/status/2090130913849983190";
-const quests=[
- {id:"follow",label:"Follow The Seekers",detail:"Follow The Seekers on X, then enter the X handle you followed from.",reward:150,icon:"↗",proofLabel:"Your X handle",placeholder:"@yourhandle"},
- {id:"engage",label:"Like, repost and leave your mark",detail:"Like and repost the pinned hunt post. Then reply beneath it or quote-post it and paste the link to your own public post.",reward:350,icon:"✦",proofLabel:"Link to your reply or quote post",placeholder:"https://x.com/yourhandle/status/..."},
-];
-const routes=[
- {id:"outpost",name:"The Outpost",kind:"Discord headquarters",detail:"Join Discord, earn your role and collect the first community clues.",pos:"outpost"},
- {id:"archives",name:"The Archives",kind:"Lore & riddles",detail:"Decode old records and uncover hidden clues.",pos:"archives"},
- {id:"wilds",name:"The Wilds",kind:"Exploration quests",detail:"Follow the trail beyond familiar territory.",pos:"wilds"},
- {id:"forge",name:"The Forge",kind:"Creative quests",detail:"Create, build and leave your mark on the hunt.",pos:"forge"},
- {id:"vault",name:"The Vault",kind:"Locked challenges",detail:"The final route—opened through progress and ownership.",pos:"vault"},
+import { useRef, useState } from "react";
+
+const huntPostUrl = "https://x.com/theseekersrh";
+
+const seekers = [
+  "https://i.ibb.co/MDSp28TD/nft-21.png",
+  "https://i.ibb.co/hJYmpwDy/nft-23.png",
+  "https://i.ibb.co/j952m33j/nft-13.png",
+  "https://i.ibb.co/rGLZK6G9/nft-9.png",
+  "https://i.ibb.co/TDcq8bXh/1.png",
+  "https://i.ibb.co/43Fjcm2/7.png",
 ];
 
-export default function Home(){
- const[done,setDone]=useState<string[]>([]); const[activeRoute,setActiveRoute]=useState("outpost");
- const[soundOn,setSoundOn]=useState(false); const audioRef=useRef<HTMLAudioElement>(null); const fadeRef=useRef<number|null>(null);
- const[walletAddress,setWalletAddress]=useState(""); const[wlStatus,setWlStatus]=useState<"idle"|"submitting"|"success"|"duplicate"|"error">("idle"); const[wlMessage,setWlMessage]=useState("");
- const[proofs,setProofs]=useState<Record<string,string>>({follow:"",engage:""}); const[proofErrors,setProofErrors]=useState<Record<string,string>>({});
- const validProof=(id:string,value:string)=>id==="follow"?/^@?[A-Za-z0-9_]{1,15}$/.test(value.trim()):/^https:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9_]+\/status\/\d+(?:\?.*)?$/i.test(value.trim());
- useEffect(()=>{const savedProofs=localStorage.getItem("seeker-proofs");if(savedProofs){const parsed=JSON.parse(savedProofs) as Record<string,string>;setProofs(parsed);setDone(quests.filter(q=>validProof(q.id,parsed[q.id]||"")).map(q=>q.id))}},[]);
- const updateProof=(id:string,value:string)=>{const nextProofs={...proofs,[id]:value};const nextDone=done.filter(x=>x!==id);setProofs(nextProofs);setDone(nextDone);setProofErrors({...proofErrors,[id]:""});localStorage.setItem("seeker-proofs",JSON.stringify(nextProofs));localStorage.setItem("seeker-quests",JSON.stringify(nextDone))};
- const submitProof=(id:string)=>{if(!validProof(id,proofs[id]||"")){setProofErrors({...proofErrors,[id]:id==="engage"?"Paste the full link to your own public X reply or quote post.":"Enter a valid X handle."});return}const next=done.includes(id)?done:[...done,id];setDone(next);setProofErrors({...proofErrors,[id]:""});localStorage.setItem("seeker-quests",JSON.stringify(next))};
- const earned=quests.filter(q=>done.includes(q.id)).reduce((s,q)=>s+q.reward,0);
- const fadeAudio=(target:number,after?:()=>void)=>{const audio=audioRef.current;if(!audio)return;if(fadeRef.current)window.clearInterval(fadeRef.current);fadeRef.current=window.setInterval(()=>{const difference=target-audio.volume;if(Math.abs(difference)<.03){audio.volume=target;if(fadeRef.current)window.clearInterval(fadeRef.current);fadeRef.current=null;after?.();return}audio.volume=Math.max(0,Math.min(1,audio.volume+Math.sign(difference)*.025))},35)};
- const toggleSound=async()=>{const audio=audioRef.current;if(!audio)return;if(soundOn){fadeAudio(0,()=>audio.pause());setSoundOn(false);return}audio.volume=0;try{await audio.play();setSoundOn(true);fadeAudio(.32)}catch{setSoundOn(false)}};
- const submitWhitelist=async(e:React.FormEvent)=>{e.preventDefault();setWlStatus("submitting");setWlMessage("");try{const response=await fetch("/api/waitlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({walletAddress,points:earned,xHandle:proofs.follow,xProofUrl:proofs.engage})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Submission failed.");const submission=data.submission;const normalizedWallet=submission.walletAddress||walletAddress.toLowerCase();const normalizedHandle=(submission.xHandle||proofs.follow).replace(/^@/,"").toLowerCase();const formSyncKey=`seeker-form-synced:${normalizedWallet}`;if(!localStorage.getItem(formSyncKey)){const formData=new URLSearchParams({"form-name":"seeker-whitelist",walletAddress:normalizedWallet,xHandle:normalizedHandle,xProfileUrl:submission.xProfileUrl||`https://x.com/${normalizedHandle}`,xProofUrl:submission.xProofUrl||proofs.engage,points:String(submission.points||500),status:submission.status||"pending",submittedAt:submission.submittedAt||new Date().toISOString()});const formResponse=await fetch("/__forms.html",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:formData.toString()});if(!formResponse.ok)throw new Error("Your whitelist entry was saved, but the review list could not be updated. Please try again.");localStorage.setItem(formSyncKey,"true")}setWlStatus(data.alreadySubmitted?"duplicate":"success");setWlMessage(data.alreadySubmitted?"This wallet was already submitted and has now been synced to the review list.":"Proof and wallet submitted. Your whitelist entry is pending review.");localStorage.setItem("seeker-wl-wallet",normalizedWallet)}catch(error){setWlStatus("error");setWlMessage(error instanceof Error?error.message:"Submission failed.")}};
- return <main>
-  <audio ref={audioRef} src="/secret-mint.mp3" loop preload="metadata"/>
-  <nav className="nav wrap"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>THE SEEKERS</span></a><div className="nav-links"><a href="#story">Lore</a><a href="#quests">Quests</a><a href="#collection">Seekers</a></div><button className={`sound-toggle ${soundOn?"playing":""}`} type="button" aria-pressed={soundOn} aria-label={soundOn?"Turn soundtrack off":"Turn soundtrack on"} onClick={toggleSound}><span className="sound-bars" aria-hidden="true"><i/><i/><i/></span>{soundOn?"Sound on":"Sound off"}</button></nav>
-  <section className="hero wrap" id="top"><div className="hero-copy"><div className="eyebrow"><span className="pulse"/> THE HUNT BEGINS BEFORE MINT</div><h1>SEEK.<br/><em>FIND.</em><br/>CLAIM.</h1><p className="lead">Earn SEEK Points before the 5,000 Seekers arrive. Complete every quest, reach 500 points and submit your wallet for whitelist access.</p><div className="hero-actions"><a href="#quests" className="button gold">Begin the hunt <span>→</span></a><a href="#story" className="button ghost">Read the lore</a></div><div className="mini-stats"><div><b>5,000</b><span>Seekers</span></div><div><b>500</b><span>Points for WL</span></div><div><b>∞</b><span>Quests ahead</span></div></div></div><div className="hero-art"><div className="sun"/><img className="hero-coin" src="/seeker-coin.png" alt="Ancient Seeker coin"/><div className="map-label"><span>✦</span><div><small>YOUR FIRST CLUE</small><b>EARN 500 POINTS. CLAIM WL.</b></div></div></div></section>
-  <div className="ticker"><div><s>FOLLOW THE ROADMAP</s> FOLLOW THE TREASURE MAP <span>✦</span> FOLLOW THE CLUES <span>✦</span> SEEK TOGETHER <span>✦</span> <s>FOLLOW THE ROADMAP</s> FOLLOW THE TREASURE MAP <span>✦</span></div></div>
-  <section className="story wrap" id="story"><div className="section-tag">01 / THE CALL</div><div className="story-grid"><h2>THE HUNT STARTS<br/><em>BEFORE MINT.</em></h2><div className="story-copy"><p>The map has surfaced before the Seekers have. Those who follow it now can earn SEEK Points and establish their place in the hunt.</p><p>Reach 500 points to submit your wallet for whitelist access. When 5,000 goblins finally emerge, the earliest hunters will already be waiting.</p><p className="accent">The treasure hunt is opening.</p></div></div></section>
-  <section className="treasure-loop"><div className="wrap"><div className="loop-intro"><div><div className="section-tag">02 / THE TREASURE LOOP</div><h2>NOT JUST A PFP.<br/><em>A KEY TO THE VAULT.</em></h2></div><p>5,000 goblins searching for the world’s shiniest onchain treasure. Hold a Seeker, stake it, follow the clues and open what others cannot.</p></div><div className="loop-steps"><article><span>01</span><div className="loop-icon">◆</div><h3>HOLD A SEEKER</h3><p>Every Seeker is a key to the wider hunt, holder routes and hidden Discord clues.</p></article><article><span>02</span><div className="loop-icon">✦</div><h3>STAKE &amp; SEEK</h3><p>Stake your Seeker to earn $SEEK and discover Vault Keys for future openings.</p></article><article><span>03</span><div className="loop-icon">⌁</div><h3>FOLLOW THE CLUES</h3><p>NFT holders and $SEEK holders uncover different clues. Hold both to see the full map.</p></article><article><span>04</span><div className="loop-icon">⬡</div><h3>OPEN THE VAULT</h3><p>Keys lead to planned treasure drops: $SEEK, gold, silver, digital treasure and rare relics.</p></article></div><div className="treasure-strip"><small>THE GOBLINS SEEK</small><div><b>$SEEK</b><i>✦</i><b>GOLD</b><i>✦</i><b>SILVER</b><i>✦</i><b>DIGITAL TREASURE</b><i>✦</i><b>RARE RELICS</b></div></div><p className="loop-note">Staking and vault rewards are planned post-mint utility. Exact assets, contracts, eligibility and availability will be announced before activation.</p></div></section>
-  <section className="quests-section" id="quests"><div className="wrap"><div className="quest-head"><div><div className="section-tag">03 / THE HUNT</div><h2>COMPLETE QUESTS.<br/><em>SECURE WL.</em></h2></div><div className="balance"><small>YOUR SEEK POINTS</small><b>{earned.toLocaleString()} <span>PTS</span></b><div className="progress"><i style={{width:`${done.length/quests.length*100}%`}}/></div><small>{done.length} OF {quests.length} PROOFS</small></div></div><div className="quest-list">{quests.map((q,i)=><article className={`quest ${done.includes(q.id)?"complete":""}`} key={q.id}><span className="quest-num">0{i+1}</span><span className="quest-icon">{q.icon}</span><div className="quest-info"><h3>{q.label}</h3><p>{q.detail}</p><a className="hunt-post-link" href={huntPostUrl} target="_blank" rel="noreferrer">Open the hunt post ↗</a><label htmlFor={`proof-${q.id}`}>{q.proofLabel}</label><input id={`proof-${q.id}`} value={proofs[q.id]||""} onChange={e=>updateProof(q.id,e.target.value)} placeholder={q.placeholder}/>{proofErrors[q.id]&&<small className="proof-error">{proofErrors[q.id]}</small>}</div><div className="reward">+{q.reward} <span>PTS</span></div><button onClick={()=>submitProof(q.id)}>{done.includes(q.id)?"Proof added ✓":"Add proof →"}</button></article>)}</div><div className={`wl-claim ${earned===500?"unlocked":"locked"}`}><div className="wl-copy"><small>{earned===500?"WHITELIST UNLOCKED":"WHITELIST LOCKED"}</small><h3>{earned===500?"500 POINTS FOUND. ENTER YOUR WALLET.":`${500-earned} POINTS LEFT TO FIND.`}</h3><p>{earned===500?"Your wallet, X profile and public reply or quote-post link will be checked together before mint.":"Add valid proof for every quest to unlock wallet submission."}</p></div>{earned===500?<form onSubmit={submitWhitelist}><label htmlFor="wl-wallet">EVM wallet address</label><div><input id="wl-wallet" value={walletAddress} onChange={e=>{setWalletAddress(e.target.value);setWlStatus("idle")}} placeholder="0x..." required pattern="0x[a-fA-F0-9]{40}"/><button className="button gold" disabled={wlStatus==="submitting"||wlStatus==="success"}>{wlStatus==="submitting"?"Submitting...":wlStatus==="success"?"Submitted ✓":"Submit for review"}</button></div>{wlMessage&&<p className={`wl-message ${wlStatus}`}>{wlMessage}</p>}</form>:<div className="wl-lock">⌁</div>}</div><p className="demo-note">Points are pre-mint access points—not live or tradable $SEEK tokens. Every submitted wallet and X identity remains pending until its proof is reviewed.</p></div></section>
-  <section className="collection wrap" id="collection"><div className="collection-head"><div><div className="section-tag">04 / THE SEEKERS</div><h2>5,000 SEEKERS.<br/>ONE MAP.<br/><em>COUNTLESS ROUTES.</em></h2></div><p>No permanent factions.<br/>No chosen path.<br/>Every Seeker explores the same world differently.</p></div><div className="hunt-grid"><div className="world-map"><img src="/seekers-treasure-map.png" alt="The Seekers treasure map with five connected quest regions"/>{routes.map(route=><button key={route.id} aria-label={`Explore ${route.name}`} className={`map-pin ${route.pos} ${activeRoute===route.id?"active":""}`} onClick={()=>setActiveRoute(route.id)}><span>{activeRoute===route.id?"✦":"•"}</span><b>{route.name}</b></button>)}<div className="route-card"><small>CURRENT ROUTE</small><h3>{routes.find(r=>r.id===activeRoute)?.name}</h3><b>{routes.find(r=>r.id===activeRoute)?.kind}</b><p>{routes.find(r=>r.id===activeRoute)?.detail}</p></div></div>{seekers.slice(1,6).map((src,i)=><figure key={src} className="seeker-card"><img src={src} alt={`The Seeker ${String(i+2).padStart(4,"0")}`}/><figcaption><span>SEEKER</span><b>#{String(i+2).padStart(4,"0")}</b></figcaption></figure>)}</div></section>
-  <section className="token wrap"><div className="token-card"><img className="token-coin" src="/seeker-coin.png" alt="The Seeker coin"/><div className="token-copy"><div className="section-tag">05 / THE KEY</div><h2>POINTS FIRST.<br/><em>$SEEK LATER.</em></h2><p>SEEK Points secure pre-mint access for the earliest hunters. The tradable $SEEK token launches after the Seekers, with its own role in opening the wider hunt.</p><a href="#quests" className="button gold">Earn WL access</a></div></div></section>
-  <footer className="wrap"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>THE SEEKERS</span></a><p>WE ARE ALL SEEKING SOMETHING.</p><div><a href="https://x.com/theseekersrh" target="_blank" rel="noreferrer">X / TWITTER</a><a href="#">DISCORD</a></div></footer>
- </main>
+const regions = [
+  {
+    id: "outpost",
+    name: "The Outpost",
+    kicker: "Where every hunt begins",
+    position: "outpost",
+    fragments: "Words I–II",
+    lore: "The first Seekers built the Outpost from stolen timber, bent keys and maps nobody else believed. Every new trail is recorded here—but the oldest page has been torn away.",
+    whisper: "The first word is never given. It is noticed.",
+  },
+  {
+    id: "archives",
+    name: "The Archives",
+    kicker: "The records beneath the records",
+    position: "archives",
+    fragments: "Words III–IV",
+    lore: "Long before $SEEK, goblins marked value with scratches in stone. Twelve entries in the first ledger were erased on the same night the ultimate treasure disappeared.",
+    whisper: "Read what remains. Count what is missing.",
+  },
+  {
+    id: "wilds",
+    name: "The Wilds",
+    kicker: "No trail stays still",
+    position: "wilds",
+    fragments: "Words V–VII",
+    lore: "The Wilds rearrange themselves around greedy travellers. Seekers who chase the brightest object become lost; those who follow the quieter glint sometimes return with a word.",
+    whisper: "Not every treasure wants to be found first.",
+  },
+  {
+    id: "forge",
+    name: "The Forge",
+    kicker: "Where keys remember fire",
+    position: "forge",
+    fragments: "Words VIII–IX",
+    lore: "Vault Keys are not cut. They are earned, heated and marked by the choices of their holder. Two keys may look identical while opening entirely different doors.",
+    whisper: "The key keeps a record of the hand that held it.",
+  },
+  {
+    id: "vault",
+    name: "The Final Vault",
+    kicker: "Twelve words. One attempt.",
+    position: "vault",
+    fragments: "Words X–XII",
+    lore: "The last vault contains more than gold. Its maker divided the password into twelve words and scattered them through the world, certain no lone Seeker could recover them all.",
+    whisper: "When the twelve are spoken in order, the map becomes a door.",
+  },
+];
+
+const treasures = [
+  ["$SEEK", "The currency of the hunt—earned through future staking and used across the Seeker world."],
+  ["GOLD", "The goblins’ oldest obsession and a planned prize within selected vault openings."],
+  ["SILVER", "Quieter than gold, harder to notice and hidden along less travelled routes."],
+  ["DIGITAL TREASURE", "Onchain assets, Vault Keys and rewards discovered as the map expands."],
+  ["RARE RELICS", "NFTs, artefacts, upgrades and objects that cannot be found twice."],
+];
+
+export default function Home() {
+  const [activeRegion, setActiveRegion] = useState("outpost");
+  const [soundOn, setSoundOn] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const fadeRef = useRef<number | null>(null);
+  const selected = regions.find((region) => region.id === activeRegion) ?? regions[0];
+
+  const fadeAudio = (target: number, after?: () => void) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (fadeRef.current) window.clearInterval(fadeRef.current);
+    fadeRef.current = window.setInterval(() => {
+      const difference = target - audio.volume;
+      if (Math.abs(difference) < 0.03) {
+        audio.volume = target;
+        if (fadeRef.current) window.clearInterval(fadeRef.current);
+        fadeRef.current = null;
+        after?.();
+        return;
+      }
+      audio.volume = Math.max(0, Math.min(1, audio.volume + Math.sign(difference) * 0.025));
+    }, 35);
+  };
+
+  const toggleSound = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (soundOn) {
+      fadeAudio(0, () => audio.pause());
+      setSoundOn(false);
+      return;
+    }
+    audio.volume = 0;
+    try {
+      await audio.play();
+      setSoundOn(true);
+      fadeAudio(0.32);
+    } catch {
+      setSoundOn(false);
+    }
+  };
+
+  return (
+    <main>
+      <audio ref={audioRef} src="/secret-mint.mp3" loop preload="metadata" />
+
+      <nav className="nav wrap">
+        <a className="brand" href="#top"><span className="brand-mark">✦</span><span>THE SEEKERS</span></a>
+        <div className="nav-links"><a href="#lore">Lore</a><a href="#map">Map</a><a href="#twelve">The Twelve</a><a href="#treasure">Treasure</a></div>
+        <button className={`sound-toggle ${soundOn ? "playing" : ""}`} type="button" aria-pressed={soundOn} onClick={toggleSound}>
+          <span className="sound-bars" aria-hidden="true"><i /><i /><i /></span>{soundOn ? "Sound on" : "Sound off"}
+        </button>
+      </nav>
+
+      <section className="hero wrap" id="top">
+        <div className="hero-copy">
+          <div className="eyebrow"><span className="pulse" /> THE HUNT IS LIVE</div>
+          <h1>FOLLOW<br />THE <em>MAP.</em></h1>
+          <p className="lead">5,000 Seekers have entered a living treasure hunt on Robinhood Chain. Shiny things are scattered everywhere—but one treasure sits above them all.</p>
+          <div className="hero-actions"><a className="button gold" href="#map">Enter the map <span>→</span></a><a className="button ghost" href="#lore">Read the legend</a></div>
+          <div className="hero-stats"><div><b>5,000</b><span>Seekers</span></div><div><b>12</b><span>Hidden words</span></div><div><b>1</b><span>Final vault</span></div></div>
+        </div>
+        <div className="hero-art"><div className="sun" /><img className="hero-coin" src="/seeker-coin.png" alt="The Seeker coin" /><div className="map-label"><span>✦</span><div><small>THE ULTIMATE TREASURE</small><b>TWELVE WORDS OPEN THE VAULT.</b></div></div></div>
+      </section>
+
+      <div className="ticker"><div>THE HUNT IS LIVE <span>✦</span> FOLLOW THE CLUES <span>✦</span> FIND THE TWELVE <span>✦</span> OPEN THE VAULT <span>✦</span> THE HUNT IS LIVE <span>✦</span></div></div>
+
+      <section className="lore wrap" id="lore">
+        <div className="section-tag">01 / THE LEGEND</div>
+        <div className="lore-heading"><h2>EVERY GOBLIN<br />SEEKS SOMETHING.</h2><p>Most seek what shines. A few seek what was hidden.</p></div>
+        <div className="lore-grid">
+          <article><span>I</span><h3>THE FIRST MAP</h3><p>Before treasure had prices, the goblins kept a single map. It did not show places. It showed desire—changing its roads whenever its holder wanted something badly enough.</p></article>
+          <article><span>II</span><h3>THE SPLIT</h3><p>One Seeker found the ultimate treasure and understood it was too powerful for one hand. The map was divided into routes; its password was divided into twelve ordinary words.</p></article>
+          <article><span>III</span><h3>THE RETURN</h3><p>Centuries later, the coin began to glow again. Five thousand Seekers heard the same instruction in different voices: follow the map, recover the words, and do not trust the obvious path.</p></article>
+        </div>
+        <blockquote>“Gold was only ever the light used to find the door.”</blockquote>
+      </section>
+
+      <section className="map-section" id="map"><div className="wrap">
+        <div className="map-heading"><div><div className="section-tag">02 / THE LIVING MAP</div><h2>ONE WORLD.<br /><em>COUNTLESS ROUTES.</em></h2></div><p>Select a location. Every region carries part of the legend, and none reveals its secrets in the same way.</p></div>
+        <div className="map-shell">
+          <div className="world-map"><img src="/seekers-treasure-map.png" alt="The Seekers treasure map" />{regions.map((region) => <button key={region.id} aria-label={`Explore ${region.name}`} className={`map-pin ${region.position} ${activeRegion === region.id ? "active" : ""}`} onClick={() => setActiveRegion(region.id)}><span>{activeRegion === region.id ? "✦" : "•"}</span><b>{region.name}</b></button>)}</div>
+          <aside className="region-dossier" key={selected.id}><small>CURRENT LOCATION</small><h3>{selected.name}</h3><b>{selected.kicker}</b><p>{selected.lore}</p><blockquote>{selected.whisper}</blockquote><div><span>HIDDEN FRAGMENTS</span><strong>{selected.fragments}</strong></div></aside>
+        </div>
+      </div></section>
+
+      <section className="twelve wrap" id="twelve">
+        <div className="twelve-copy"><div className="section-tag">03 / THE ULTIMATE TREASURE</div><h2>TWELVE WORDS.<br /><em>ONE PASSWORD.</em></h2><p>The ultimate treasure is protected by a twelve-word password. The words are hidden across lore, puzzles, holder routes, $SEEK routes and events yet to appear.</p><p>No wallet recovery phrase will ever be requested. The twelve words belong only to the Seeker hunt.</p></div>
+        <div className="vault-panel"><div className="vault-top"><span>FINAL VAULT</span><b>0 / 12 RECOVERED</b></div><div className="word-grid">{Array.from({ length: 12 }, (_, index) => <div key={index}><span>{String(index + 1).padStart(2, "0")}</span><b>LOCKED</b></div>)}</div><div className="vault-seal"><span>⌁</span><div><small>THE PHRASE IS INCOMPLETE</small><b>THE FINAL DOOR REMAINS SEALED.</b></div></div></div>
+      </section>
+
+      <section className="hunt-loop"><div className="wrap"><div className="section-tag">04 / HOW THE WORLD MOVES</div><h2>SEEK. STAKE.<br /><em>OPEN.</em></h2><div className="loop-grid"><article><span>01</span><h3>HOLD A SEEKER</h3><p>Your Seeker is your identity, your key and your route into the hunt.</p></article><article><span>02</span><h3>STAKE &amp; EARN</h3><p>Future staking earns $SEEK and Vault Keys used throughout the expanding world.</p></article><article><span>03</span><h3>FOLLOW CLUES</h3><p>NFT and $SEEK holders will uncover different parts of the complete map.</p></article><article><span>04</span><h3>OPEN VAULTS</h3><p>Keys reveal shiny treasure. The twelve words reveal something greater.</p></article></div></div></section>
+
+      <section className="treasure wrap" id="treasure"><div className="treasure-heading"><div><div className="section-tag">05 / SHINY THINGS</div><h2>GOBLINS DO NOT<br /><em>SEEK EMPTY-HANDED.</em></h2></div><p>The hunt grows through planned staking, vault openings, new clues and treasure placed back into the world.</p></div><div className="treasure-list">{treasures.map(([name, description], index) => <article key={name}><span>{String(index + 1).padStart(2, "0")}</span><h3>{name}</h3><p>{description}</p></article>)}</div><p className="utility-note">Staking and reward assets are planned utility. Exact contracts, eligibility, availability and activation dates will be announced before use.</p></section>
+
+      <section className="collection wrap"><div className="collection-heading"><div className="section-tag">06 / THE SEEKERS</div><h2>DIFFERENT FACES.<br /><em>DIFFERENT PATHS.</em></h2></div><div className="seeker-grid">{seekers.map((src, index) => <figure key={src}><img src={src} alt={`Seeker ${String(index + 1).padStart(4, "0")}`} /><figcaption><span>SEEKER</span><b>#{String(index + 1).padStart(4, "0")}</b></figcaption></figure>)}</div></section>
+
+      <section className="final-call wrap"><img src="/seeker-coin.png" alt="Seeker coin" /><div><div className="section-tag">THE MAP IS OPEN</div><h2>THE TREASURE<br />IS ALREADY MOVING.</h2><a className="button gold" href={huntPostUrl} target="_blank" rel="noreferrer">Follow on X <span>↗</span></a></div></section>
+
+      <footer className="wrap"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>THE SEEKERS</span></a><p>WE ARE ALL SEEKING SOMETHING.</p><a href={huntPostUrl} target="_blank" rel="noreferrer">X / TWITTER</a></footer>
+    </main>
+  );
 }

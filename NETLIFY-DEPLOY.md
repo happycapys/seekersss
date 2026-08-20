@@ -1,6 +1,6 @@
 # Deploy The Seekers on Netlify
 
-This package has been converted from the original Cloudflare/Sites build to a standard Next.js application for Netlify.
+This is a standard Next.js application prepared for Netlify.
 
 ## Recommended deployment
 
@@ -12,11 +12,11 @@ This package has been converted from the original Cloudflare/Sites build to a st
    - Publish directory: leave blank (automatic)
 5. Deploy the site.
 
-The whitelist form uses Netlify Blobs. It works when the app is deployed through Netlify and does not require you to create a separate database.
+No environment variables, Netlify Forms or database are required for this post-launch version.
 
 ## Important
 
-Do not use Netlify's static drag-and-drop deploy for this package. The whitelist form needs the Next.js server/API route, so deploy it from Git or with the Netlify CLI.
+Deploy from Git so Netlify can run the Next.js build and automatically publish each future GitHub update.
 
 ## Local check
 
